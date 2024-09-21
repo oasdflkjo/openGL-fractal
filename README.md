@@ -1,0 +1,1 @@
+gcc -Os -s -mwindows -Wall demo.c -o demo.exe -lopengl32 -lgdi32 -lwinmm -lglu32
