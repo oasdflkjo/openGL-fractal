@@ -1,8 +1,12 @@
 #include <windows.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include <GL/glext.h>
+// #include <GL/glext.h> // Comment out this line
 #include <stdio.h>
+
+// Add these includes
+#include <GL/glext.h>
+#include <GL/wglext.h>
 
 // Add these global variable declarations
 GLint iTimeLocation;
@@ -16,6 +20,26 @@ const float targetFrameTime = 1.0f / targetFPS;
 // Add these function pointer declarations
 typedef HGLRC (WINAPI * PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int *attribList);
 typedef BOOL (WINAPI * PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hDC, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
+typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(int interval);
+
+// Add these near the top of the file
+#ifndef GL_COMPILE_STATUS
+#define GL_COMPILE_STATUS 0x8B81
+#endif
+
+#ifndef GL_LINK_STATUS
+#define GL_LINK_STATUS 0x8B82
+#endif
+
+// Add these function declarations near the top of the file, after the other declarations
+void CheckShaderCompileStatus(GLuint shader);
+void CheckProgramLinkStatus(GLuint program);
+
+// Add these OpenGL function pointers
+PFNGLGETSHADERIVPROC glGetShaderiv;
+PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
+PFNGLGETPROGRAMIVPROC glGetProgramiv;
+PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
 
 // OpenGL function pointers
 PFNGLCREATESHADERPROC glCreateShader;
@@ -28,6 +52,10 @@ PFNGLUSEPROGRAMPROC glUseProgram;
 PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
 PFNGLUNIFORM1FPROC glUniform1f;
 PFNGLUNIFORM2FPROC glUniform2f;
+PFNGLGETSHADERIVPROC glGetShaderiv;
+PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
+PFNGLGETPROGRAMIVPROC glGetProgramiv;
+PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
 
 // Function to load OpenGL functions
 void LoadOpenGLFunctions() {
@@ -41,6 +69,15 @@ void LoadOpenGLFunctions() {
     glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)wglGetProcAddress("glGetUniformLocation");
     glUniform1f = (PFNGLUNIFORM1FPROC)wglGetProcAddress("glUniform1f");
     glUniform2f = (PFNGLUNIFORM2FPROC)wglGetProcAddress("glUniform2f");
+    PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+    glGetShaderiv = (PFNGLGETSHADERIVPROC)wglGetProcAddress("glGetShaderiv");
+    glGetShaderInfoLog = (PFNGLGETSHADERINFOLOGPROC)wglGetProcAddress("glGetShaderInfoLog");
+    glGetProgramiv = (PFNGLGETPROGRAMIVPROC)wglGetProcAddress("glGetProgramiv");
+    glGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)wglGetProcAddress("glGetProgramInfoLog");
+    
+    if (wglSwapIntervalEXT) {
+        wglSwapIntervalEXT(1); // Enable vsync
+    }
 }
 
 // Function declarations
@@ -94,14 +131,16 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     DEVMODE screenSettings;
     memset(&screenSettings, 0, sizeof(screenSettings));
     screenSettings.dmSize = sizeof(screenSettings);
-    screenSettings.dmPelsWidth = 3440;  // Set to your screen resolution
-    screenSettings.dmPelsHeight = 1440;
+    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    screenSettings.dmPelsWidth = screenWidth;
+    screenSettings.dmPelsHeight = screenHeight;
     screenSettings.dmBitsPerPel = 32;
     screenSettings.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
     ChangeDisplaySettings(&screenSettings, CDS_FULLSCREEN);
 
     // Create window
-    HWND hwnd = CreateWindowEx(0, (LPCSTR)0xC018, 0, WS_POPUP | WS_VISIBLE, 0, 0, 3440, 1440, 0, 0, hInstance, 0);
+    HWND hwnd = CreateWindowEx(0, (LPCSTR)0xC018, 0, WS_POPUP | WS_VISIBLE, 0, 0, screenWidth, screenHeight, 0, 0, hInstance, 0);
     HDC hdc = GetDC(hwnd);
     
 
@@ -125,6 +164,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     GLuint program = glCreateProgram();
     glAttachShader(program, shader);
     glLinkProgram(program);
+    CheckProgramLinkStatus(program);
     glUseProgram(program);
     iTimeLocation = glGetUniformLocation(program, "iTime");
     iResolutionLocation = glGetUniformLocation(program, "iResolution");
@@ -158,7 +198,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
             // Update uniforms
             float currentTimeSeconds = GetTickCount() / 1000.0f - startTime;
             glUniform1f(iTimeLocation, currentTimeSeconds);
-            glUniform2f(iResolutionLocation, 3440.0f, 1440.0f);
+            glUniform2f(iResolutionLocation, (float)screenWidth, (float)screenHeight);
 
             // Render simple shader effect
 
@@ -185,6 +225,7 @@ GLuint CompileShader(const char *source, GLenum type) {
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, NULL);
     glCompileShader(shader);
+    CheckShaderCompileStatus(shader);
     return shader;
 }
 
@@ -193,4 +234,25 @@ void PlayMidiNote() {
     HMIDIOUT hMidiOut;
     midiOutOpen(&hMidiOut, 0, 0, 0, CALLBACK_NULL);
     midiOutShortMsg(hMidiOut, 0x007F3C90);  // Example MIDI note
+}
+
+// Add these new functions
+void CheckShaderCompileStatus(GLuint shader) {
+    GLint success;
+    GLchar infoLog[512];
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(shader, 512, NULL, infoLog);
+        printf("ERROR::SHADER::COMPILATION_FAILED\n%s\n", infoLog);
+    }
+}
+
+void CheckProgramLinkStatus(GLuint program) {
+    GLint success;
+    GLchar infoLog[512];
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(program, 512, NULL, infoLog);
+        printf("ERROR::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
+    }
 }

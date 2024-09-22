@@ -9,7 +9,7 @@ void main() {
     vec2 uv = (gl_FragCoord.xy - iResolution * 0.5) / iResolution.y;
 
     // Zoom factor, now with float precision
-    float zoom = exp(iTime * 0.05); // 2x zoom speed
+    float zoom = exp(iTime * 0.3); // 2x zoom speed
 
     // Float precision center for the fractal
     vec2 center = vec2(-0.74543, 0.11301); // Known detailed region
