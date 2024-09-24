@@ -1,47 +1,29 @@
 #include <windows.h>
 #include <GL/gl.h>
-#include <GL/glu.h>
-// #include <GL/glext.h> // Comment out this line
 #include <stdio.h>
-
-// Add these includes
 #include <GL/glext.h>
 #include <GL/wglext.h>
 
-// Add these global variable declarations
+// Global variable declarations
 GLint iTimeLocation;
 GLint iResolutionLocation;
 float startTime;
-FILETIME lastTime;
-FILETIME currentTime;
-const float targetFPS = 60.0f;
+LARGE_INTEGER frequency;
+LARGE_INTEGER lastTime;
+LARGE_INTEGER currentTime;
+const float targetFPS = 100.0f;
 const float targetFrameTime = 1.0f / targetFPS;
 
-// Add these function pointer declarations
+// Function pointer declarations
 typedef HGLRC (WINAPI * PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int *attribList);
 typedef BOOL (WINAPI * PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hDC, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(int interval);
 
-// Add these near the top of the file
-#ifndef GL_COMPILE_STATUS
-#define GL_COMPILE_STATUS 0x8B81
-#endif
-
-#ifndef GL_LINK_STATUS
-#define GL_LINK_STATUS 0x8B82
-#endif
-
-// Add these function declarations near the top of the file, after the other declarations
-void CheckShaderCompileStatus(GLuint shader);
-void CheckProgramLinkStatus(GLuint program);
-
-// Add these OpenGL function pointers
+// OpenGL function pointers
 PFNGLGETSHADERIVPROC glGetShaderiv;
 PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
 PFNGLGETPROGRAMIVPROC glGetProgramiv;
 PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
-
-// OpenGL function pointers
 PFNGLCREATESHADERPROC glCreateShader;
 PFNGLSHADERSOURCEPROC glShaderSource;
 PFNGLCOMPILESHADERPROC glCompileShader;
@@ -52,12 +34,35 @@ PFNGLUSEPROGRAMPROC glUseProgram;
 PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
 PFNGLUNIFORM1FPROC glUniform1f;
 PFNGLUNIFORM2FPROC glUniform2f;
-PFNGLGETSHADERIVPROC glGetShaderiv;
-PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
-PFNGLGETPROGRAMIVPROC glGetProgramiv;
-PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
 
-// Function to load OpenGL functions
+// Function declarations
+void LoadOpenGLFunctions();
+GLuint CompileShader(const char *source, GLenum type);
+void CheckShaderCompileStatus(GLuint shader);
+void CheckProgramLinkStatus(GLuint program);
+char* LoadShader(const char *filename);
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+// Pixel format descriptor
+PIXELFORMATDESCRIPTOR pfd = {
+    sizeof(PIXELFORMATDESCRIPTOR),
+    1,
+    PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+    PFD_TYPE_RGBA,
+    32,
+    0, 0, 0, 0, 0, 0,
+    0,
+    0,
+    0,
+    0, 0, 0, 0,
+    24,
+    0,
+    0,
+    PFD_MAIN_PLANE,
+    0,
+    0, 0, 0
+};
+
 void LoadOpenGLFunctions() {
     glCreateShader = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
     glShaderSource = (PFNGLSHADERSOURCEPROC)wglGetProcAddress("glShaderSource");
@@ -80,40 +85,23 @@ void LoadOpenGLFunctions() {
     }
 }
 
-// Function declarations
-void PlayMidiNote();
-GLuint CompileShader(const char *source, GLenum type);
-// Pixel format descriptor
-PIXELFORMATDESCRIPTOR pfd = {
-    sizeof(PIXELFORMATDESCRIPTOR),
-    1,                          // Version number
-    PFD_DRAW_TO_WINDOW |        // Support window
-    PFD_SUPPORT_OPENGL |        // Support OpenGL
-    PFD_DOUBLEBUFFER,           // Double buffered
-    PFD_TYPE_RGBA,              // RGBA type
-    32,                         // 32-bit color depth
-    0, 0, 0, 0, 0, 0,           // Ignore color bits
-    0,                          // No alpha buffer
-    0,                          // Ignore shift bit
-    0,                          // No accumulation buffer
-    0, 0, 0, 0,                 // Ignore accumulation bits
-    24,                         // 24-bit z-buffer
-    0,                          // No stencil buffer
-    0,                          // No auxiliary buffer
-    PFD_MAIN_PLANE,             // Main layer
-    0,                          // Reserved
-    0, 0, 0                     // Layer masks ignored
-};
-
-// Simple file loader for the shader
 char* LoadShader(const char *filename) {
     FILE *file = fopen(filename, "r");
+    if (!file) {
+        fprintf(stderr, "Failed to open shader file: %s\n", filename);
+        return NULL;
+    }
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
     fseek(file, 0, SEEK_SET);
-    char *buffer = malloc(length + 1);
+    char *buffer = (char*)malloc(length + 1);
+    if (!buffer) {
+        fprintf(stderr, "Failed to allocate memory for shader file: %s\n", filename);
+        fclose(file);
+        return NULL;
+    }
     fread(buffer, 1, length, file);
-    buffer[length] = 0;
+    buffer[length] = '\0';
     fclose(file);
     return buffer;
 }
@@ -127,9 +115,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 }
 
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    // Set fullscreen
-    DEVMODE screenSettings;
-    memset(&screenSettings, 0, sizeof(screenSettings));
+    DEVMODE screenSettings = {0};
     screenSettings.dmSize = sizeof(screenSettings);
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -139,27 +125,23 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     screenSettings.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
     ChangeDisplaySettings(&screenSettings, CDS_FULLSCREEN);
 
-    // Create window
     HWND hwnd = CreateWindowEx(0, (LPCSTR)0xC018, 0, WS_POPUP | WS_VISIBLE, 0, 0, screenWidth, screenHeight, 0, 0, hInstance, 0);
     HDC hdc = GetDC(hwnd);
-    
 
-    // Set pixel format
     int pf = ChoosePixelFormat(hdc, &pfd);
     SetPixelFormat(hdc, pf, &pfd);
 
-    // Create OpenGL context
     HGLRC hglrc = wglCreateContext(hdc);
     wglMakeCurrent(hdc, hglrc);
 
-    // Load OpenGL functions
     LoadOpenGLFunctions();
 
-    // Hide cursor
     ShowCursor(FALSE);
 
-    // Load and compile shader
     char *fragmentShaderSource = LoadShader("shader.frag");
+    if (!fragmentShaderSource) {
+        return -1;
+    }
     GLuint shader = CompileShader(fragmentShaderSource, GL_FRAGMENT_SHADER);
     GLuint program = glCreateProgram();
     glAttachShader(program, shader);
@@ -171,13 +153,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     startTime = GetTickCount() / 1000.0f;
     free(fragmentShaderSource);
 
-    // Play MIDI note
-    //PlayMidiNote();
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&lastTime);
 
-    // Initialize timer
-    GetSystemTimeAsFileTime(&lastTime);
-
-    // Main loop
     MSG msg;
     while (!GetAsyncKeyState(VK_ESCAPE)) {
         if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
@@ -185,42 +163,30 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
             DispatchMessage(&msg);
         }
 
-        // Calculate delta time
-        GetSystemTimeAsFileTime(&currentTime);
-        ULARGE_INTEGER ul1, ul2;
-        ul1.LowPart = lastTime.dwLowDateTime;
-        ul1.HighPart = lastTime.dwHighDateTime;
-        ul2.LowPart = currentTime.dwLowDateTime;
-        ul2.HighPart = currentTime.dwHighDateTime;
-        float deltaTime = (float)(ul2.QuadPart - ul1.QuadPart) / 10000000.0f; // Convert 100-nanosecond intervals to seconds
+        QueryPerformanceCounter(&currentTime);
+        float deltaTime = (float)(currentTime.QuadPart - lastTime.QuadPart) / frequency.QuadPart;
 
         if (deltaTime >= targetFrameTime) {
-            // Update uniforms
             float currentTimeSeconds = GetTickCount() / 1000.0f - startTime;
             glUniform1f(iTimeLocation, currentTimeSeconds);
             glUniform2f(iResolutionLocation, (float)screenWidth, (float)screenHeight);
 
-            // Render simple shader effect
-
             glClear(GL_COLOR_BUFFER_BIT);
-            glRects(-1, -1, 1, 1);  // Placeholder for shader rendering
+            glRects(-1, -1, 1, 1);
             SwapBuffers(hdc);
 
-            // Update lastTime
             lastTime = currentTime;
         }
     }
 
-    // Clean up
     wglMakeCurrent(NULL, NULL);
     wglDeleteContext(hglrc);
     ReleaseDC(hwnd, hdc);
-    ChangeDisplaySettings(NULL, 0);  // Restore screen settings
+    ChangeDisplaySettings(NULL, 0);
     ShowCursor(TRUE);
     ExitProcess(0);
 }
 
-// Compile shader function
 GLuint CompileShader(const char *source, GLenum type) {
     GLuint shader = glCreateShader(type);
     glShaderSource(shader, 1, &source, NULL);
@@ -229,21 +195,13 @@ GLuint CompileShader(const char *source, GLenum type) {
     return shader;
 }
 
-// MIDI Note Playback
-void PlayMidiNote() {
-    HMIDIOUT hMidiOut;
-    midiOutOpen(&hMidiOut, 0, 0, 0, CALLBACK_NULL);
-    midiOutShortMsg(hMidiOut, 0x007F3C90);  // Example MIDI note
-}
-
-// Add these new functions
 void CheckShaderCompileStatus(GLuint shader) {
     GLint success;
     GLchar infoLog[512];
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
         glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        printf("ERROR::SHADER::COMPILATION_FAILED\n%s\n", infoLog);
+        fprintf(stderr, "ERROR::SHADER::COMPILATION_FAILED\n%s\n", infoLog);
     }
 }
 
@@ -253,6 +211,6 @@ void CheckProgramLinkStatus(GLuint program) {
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if (!success) {
         glGetProgramInfoLog(program, 512, NULL, infoLog);
-        printf("ERROR::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
+        fprintf(stderr, "ERROR::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
     }
 }
