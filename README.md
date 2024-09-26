@@ -18,19 +18,6 @@ To build and run this project, you'll need:
 - GCC compiler (MinGW-w64 recommended)
 - OpenGL headers and libraries
 
-Note: While Windows includes some OpenGL support by default, you may need to install additional OpenGL development files. The exact headers and libraries required (like glext.h and wglext.h) are not always included in the default Windows installation.
-
-## Setting up OpenGL Development Files
-
-1. Download the latest OpenGL headers from the Khronos Group's OpenGL Registry:
-   - glext.h: https://www.khronos.org/registry/OpenGL/api/GL/glext.h
-   - wglext.h: https://www.khronos.org/registry/OpenGL/api/GL/wglext.h
-
-2. Place these header files in your compiler's include directory, typically:
-   `C:\MinGW\include\GL\` (adjust the path according to your MinGW installation)
-
-3. Ensure your compiler's include path is set up correctly to find these headers.
-
 ## Building the Project
 
 1. Ensure you have GCC installed and added to your system PATH.
