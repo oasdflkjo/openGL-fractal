@@ -46,6 +46,12 @@ PFNGLBINDBUFFERBASEPROC glBindBufferBase;
 PFNGLBUFFERSUBDATAPROC glBufferSubData;
 PFNGLMAPBUFFERPROC glMapBuffer;
 PFNGLUNMAPBUFFERPROC glUnmapBuffer;
+PFNGLDRAWARRAYSINSTANCEDPROC glDrawArraysInstanced;
+PFNGLVERTEXATTRIBDIVISORPROC glVertexAttribDivisor;
+PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
+PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
+PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
+PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
 
 // Function declarations
 void LoadOpenGLFunctions();
@@ -80,7 +86,11 @@ GLuint computeProgram;
 GLuint particleBuffer;
 GLint mousePositionLocation;
 GLint deltaTimeLocation;
-const int NUM_PARTICLES = 10000; // Adjust as needed
+const int NUM_PARTICLES = 100000; // We'll start with 1 million and scale up
+const int WORK_GROUP_SIZE = 256;
+GLuint iResolutionLocationCompute;
+GLuint vertexArray;
+GLuint vertexBuffer;
 
 void LoadOpenGLFunctions() {
     glCreateShader = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
@@ -114,6 +124,12 @@ void LoadOpenGLFunctions() {
     glBufferSubData = (PFNGLBUFFERSUBDATAPROC)wglGetProcAddress("glBufferSubData");
     glMapBuffer = (PFNGLMAPBUFFERPROC)wglGetProcAddress("glMapBuffer");
     glUnmapBuffer = (PFNGLUNMAPBUFFERPROC)wglGetProcAddress("glUnmapBuffer");
+    glDrawArraysInstanced = (PFNGLDRAWARRAYSINSTANCEDPROC)wglGetProcAddress("glDrawArraysInstanced");
+    glVertexAttribDivisor = (PFNGLVERTEXATTRIBDIVISORPROC)wglGetProcAddress("glVertexAttribDivisor");
+    glGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)wglGetProcAddress("glGenVertexArrays");
+    glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)wglGetProcAddress("glBindVertexArray");
+    glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)wglGetProcAddress("glEnableVertexAttribArray");
+    glVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC)wglGetProcAddress("glVertexAttribPointer");
 }
 
 char* LoadShader(const char *filename) {
@@ -172,22 +188,39 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     // Initialize random seed
     srand(time(NULL));
 
-    // Set up particle buffer
-    glGenBuffers(1, &particleBuffer);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(float) * 4, NULL, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffer);
+    // Set up particle buffers (ping-pong)
+    GLuint particleBuffers[2];
+    glGenBuffers(2, particleBuffers);
+    for (int i = 0; i < 2; i++) {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffers[i]);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(float) * 4, NULL, GL_DYNAMIC_DRAW);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, particleBuffers[i]);
+    }
 
-    // Initialize particles with random positions
+    // Initialize particles
     float *initialParticleData = (float*)malloc(NUM_PARTICLES * 4 * sizeof(float));
     for (int i = 0; i < NUM_PARTICLES; i++) {
-        initialParticleData[i*4] = (float)rand() / RAND_MAX * 2.0f - 1.0f; // x: -1 to 1
-        initialParticleData[i*4+1] = (float)rand() / RAND_MAX * 2.0f - 1.0f; // y: -1 to 1
-        initialParticleData[i*4+2] = 0.0f; // vx
-        initialParticleData[i*4+3] = 0.0f; // vy
+        initialParticleData[i*4] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+        initialParticleData[i*4+1] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
+        initialParticleData[i*4+2] = 0.0f;
+        initialParticleData[i*4+3] = 0.0f;
     }
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffers[0]);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, NUM_PARTICLES * 4 * sizeof(float), initialParticleData);
     free(initialParticleData);
+
+    // Set up vertex array and buffer for instanced rendering
+    glGenVertexArrays(1, &vertexArray);
+    glBindVertexArray(vertexArray);
+
+    glGenBuffers(1, &vertexBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+    float point[] = {0.0f, 0.0f};
+    glBufferData(GL_ARRAY_BUFFER, sizeof(point), point, GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
+    glVertexAttribDivisor(0, 0);
 
     char *fragmentShaderSource = LoadShader("shader.frag");
     if (!fragmentShaderSource) {
@@ -196,6 +229,14 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     GLuint shader = CompileShader(fragmentShaderSource, GL_FRAGMENT_SHADER);
     GLuint program = glCreateProgram();
     glAttachShader(program, shader);
+
+    char *vertexShaderSource = LoadShader("shader.vert");
+    if (!vertexShaderSource) {
+        return -1;
+    }
+    GLuint vertexShader = CompileShader(vertexShaderSource, GL_VERTEX_SHADER);
+    glAttachShader(program, vertexShader);
+
     glLinkProgram(program);
     CheckProgramLinkStatus(program);
     glUseProgram(program);
@@ -203,6 +244,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     iResolutionLocation = glGetUniformLocation(program, "iResolution");
     startTime = GetTickCount() / 1000.0f;
     free(fragmentShaderSource);
+    free(vertexShaderSource);
 
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&lastTime);
@@ -219,9 +261,15 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     CheckProgramLinkStatus(computeProgram);
     mousePositionLocation = glGetUniformLocation(computeProgram, "mousePosition");
     deltaTimeLocation = glGetUniformLocation(computeProgram, "deltaTime");
+    iResolutionLocationCompute = glGetUniformLocation(computeProgram, "iResolution");
     free(computeShaderSource);
 
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     MSG msg;
+    int frameCount = 0;
+    int currentBuffer = 0;
     while (!GetAsyncKeyState(VK_ESCAPE)) {
         if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
@@ -231,31 +279,48 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         QueryPerformanceCounter(&currentTime);
         float deltaTime = (float)(currentTime.QuadPart - lastTime.QuadPart) / frequency.QuadPart;
 
-        if (deltaTime >= targetFrameTime) {
-            // Update particle positions using compute shader
-            glUseProgram(computeProgram);
-            
-            // Get mouse position
-            POINT mousePos;
-            GetCursorPos(&mousePos);
-            ScreenToClient(hwnd, &mousePos);
-            glUniform2f(mousePositionLocation, (float)mousePos.x / screenWidth * 2.0f - 1.0f, 1.0f - (float)mousePos.y / screenHeight * 2.0f);
-            
-            glUniform1f(deltaTimeLocation, deltaTime);
-            glDispatchCompute(NUM_PARTICLES / 256, 1, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        // Update particles
+        glUseProgram(computeProgram);
+        
+        // Get mouse position
+        POINT mousePos;
+        GetCursorPos(&mousePos);
+        ScreenToClient(hwnd, &mousePos);
+        glUniform2f(mousePositionLocation, (float)mousePos.x, (float)(screenHeight - mousePos.y));
+        
+        glUniform1f(deltaTimeLocation, deltaTime);
+        glUniform2f(iResolutionLocationCompute, (float)screenWidth, (float)screenHeight);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffers[currentBuffer]);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, particleBuffers[1-currentBuffer]);
+        glDispatchCompute(NUM_PARTICLES / WORK_GROUP_SIZE, 1, 1);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-            // Render particles
-            glUseProgram(program);
-            float currentTimeSeconds = GetTickCount() / 1000.0f - startTime;
-            glUniform1f(iTimeLocation, currentTimeSeconds);
-            glUniform2f(iResolutionLocation, (float)screenWidth, (float)screenHeight);
+        // Render particles
+        glClear(GL_COLOR_BUFFER_BIT);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);  // Set clear color to black
+        glUseProgram(program);
+        float currentTimeSeconds = GetTickCount() / 1000.0f - startTime;
+        glUniform1f(iTimeLocation, currentTimeSeconds);
+        glUniform2f(iResolutionLocation, (float)screenWidth, (float)screenHeight);
+        glBindVertexArray(vertexArray);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffers[1-currentBuffer]);
+        glDrawArraysInstanced(GL_POINTS, 0, 1, NUM_PARTICLES);
 
-            glClear(GL_COLOR_BUFFER_BIT);
-            glRects(-1, -1, 1, 1);
-            SwapBuffers(hdc);
+        SwapBuffers(hdc);
+        currentBuffer = 1 - currentBuffer;
 
-            lastTime = currentTime;
+        lastTime = currentTime;
+        frameCount++;
+
+        // Debug output
+        if (frameCount % 60 == 0) {
+            printf("Frame: %d, Mouse: (%ld, %ld), DeltaTime: %f\n", frameCount, mousePos.x, mousePos.y, deltaTime);
+        }
+
+        // Check for OpenGL errors
+        GLenum err;
+        while ((err = glGetError()) != GL_NO_ERROR) {
+            printf("OpenGL error: %d\n", err);
         }
     }
 

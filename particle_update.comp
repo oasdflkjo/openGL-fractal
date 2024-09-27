@@ -10,9 +10,16 @@ layout(std430, binding = 1) buffer ParticleBufferOut {
     vec4 particlesOut[];
 };
 
+// Input uniforms
 uniform vec2 mousePosition;
 uniform float deltaTime;
 uniform vec2 iResolution;
+
+// Adjustable parameters
+uniform float attractionStrength = 2.0;
+uniform float maxAcceleration = 5.0;
+uniform float velocityDamping = 0.999;
+uniform float bounceCoefficient = 0.8;
 
 void main() {
     uint gid = gl_GlobalInvocationID.x;
@@ -25,19 +32,19 @@ void main() {
     
     vec2 direction = normalizedMouse - position;
     float distance = length(direction);
-    vec2 acceleration = normalize(direction) * min(2.0 / (distance * distance + 0.1), 5.0);
+    vec2 acceleration = normalize(direction) * min(attractionStrength / (distance * distance + 0.1), maxAcceleration);
     
     velocity += acceleration * deltaTime;
-    velocity *= 0.99;
+    velocity *= velocityDamping;
     position += velocity * deltaTime;
     
     if (abs(position.x) > 1.0) {
         position.x = sign(position.x) * 1.0;
-        velocity.x *= -0.8;
+        velocity.x *= -bounceCoefficient;
     }
     if (abs(position.y) > 1.0) {
         position.y = sign(position.y) * 1.0;
-        velocity.y *= -0.8;
+        velocity.y *= -bounceCoefficient;
     }
     
     particlesOut[gid] = vec4(position, velocity);
