@@ -5,6 +5,7 @@
 #include <GL/wglext.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 // Global variable declarations
 GLint iTimeLocation;
@@ -203,10 +204,13 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     // Initialize particles
     float *initialParticleData = (float*)malloc(NUM_PARTICLES * 4 * sizeof(float));
     for (int i = 0; i < NUM_PARTICLES; i++) {
-        initialParticleData[i*4] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-        initialParticleData[i*4+1] = ((float)rand() / RAND_MAX) * 2.0f - 1.0f;
-        initialParticleData[i*4+2] = 0.0f;
-        initialParticleData[i*4+3] = 0.0f;
+        float angle = ((float)rand() / RAND_MAX) * 2.0f * 3.14159f;
+        float distance = sqrt((float)rand() / RAND_MAX) * (screenHeight / 2.0f);
+        
+        initialParticleData[i*4] = screenWidth / 2.0f + distance * cos(angle);  // x
+        initialParticleData[i*4+1] = screenHeight / 2.0f + distance * sin(angle);  // y
+        initialParticleData[i*4+2] = 0.0f;  // vx
+        initialParticleData[i*4+3] = 0.0f;  // vy
     }
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffers[0]);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, NUM_PARTICLES * 4 * sizeof(float), initialParticleData);
@@ -295,6 +299,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         
         glUniform1f(deltaTimeLocation, deltaTime);
         glUniform2f(iResolutionLocationCompute, (float)screenWidth, (float)screenHeight);
+        glUniform1f(glGetUniformLocation(computeProgram, "aspectRatio"), (float)screenWidth / screenHeight);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffers[currentBuffer]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, particleBuffers[1-currentBuffer]);
 
@@ -311,6 +316,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         float currentTimeSeconds = GetTickCount() / 1000.0f - startTime;
         glUniform1f(iTimeLocation, currentTimeSeconds);
         glUniform2f(iResolutionLocation, (float)screenWidth, (float)screenHeight);
+        glUniform1f(glGetUniformLocation(program, "aspectRatio"), (float)screenWidth / screenHeight);
         glBindVertexArray(vertexArray);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffers[1-currentBuffer]);
 

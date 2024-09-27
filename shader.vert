@@ -16,10 +16,8 @@ void main() {
         gl_Position = vec4(cursorPos, 0.0, 1.0);
     } else {
         vec2 particlePos = particles[gl_InstanceID].xy;
-        vec2 screenPos = particlePos * 0.5 + 0.5;
-        vec2 pixelPos = screenPos * iResolution;
-        vec2 normalizedPos = (pixelPos / iResolution) * 2.0 - 1.0;
+        vec2 normalizedPos = (particlePos / iResolution) * 2.0 - 1.0;
         gl_Position = vec4(normalizedPos, 0.0, 1.0);
     }
-    // gl_PointSize is now set in the C code
+    gl_PointSize = 2.0;
 }
