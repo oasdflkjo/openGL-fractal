@@ -16,10 +16,10 @@ uniform float deltaTime;
 uniform vec2 iResolution;
 
 // Adjustable parameters
-uniform float attractionStrength = 2.0;
-uniform float maxAcceleration = 5.0;
-uniform float velocityDamping = 0.999;
-uniform float bounceCoefficient = 0.8;
+uniform float attractionStrength = 0.75;
+uniform float maxAcceleration = 8.0;
+uniform float velocityDamping = 0.96;
+uniform float bounceCoefficient = 0.4;
 
 // Random number generation
 uint seed = 0;

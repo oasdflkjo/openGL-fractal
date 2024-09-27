@@ -52,6 +52,7 @@ PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
 PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
 PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
 PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
+PFNGLUNIFORM1IPROC glUniform1i;
 
 // Function declarations
 void LoadOpenGLFunctions();
@@ -91,6 +92,7 @@ const int WORK_GROUP_SIZE = 256;
 GLuint iResolutionLocationCompute;
 GLuint vertexArray;
 GLuint vertexBuffer;
+float mouseX = 0.0f, mouseY = 0.0f;
 
 void LoadOpenGLFunctions() {
     glCreateShader = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
@@ -130,6 +132,7 @@ void LoadOpenGLFunctions() {
     glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)wglGetProcAddress("glBindVertexArray");
     glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)wglGetProcAddress("glEnableVertexAttribArray");
     glVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC)wglGetProcAddress("glVertexAttribPointer");
+    glUniform1i = (PFNGLUNIFORM1IPROC)wglGetProcAddress("glUniform1i");
 }
 
 char* LoadShader(const char *filename) {
@@ -286,7 +289,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         POINT mousePos;
         GetCursorPos(&mousePos);
         ScreenToClient(hwnd, &mousePos);
-        glUniform2f(mousePositionLocation, (float)mousePos.x, (float)(screenHeight - mousePos.y));
+        mouseX = (float)mousePos.x;
+        mouseY = (float)(screenHeight - mousePos.y);
+        glUniform2f(mousePositionLocation, mouseX, mouseY);
         
         glUniform1f(deltaTimeLocation, deltaTime);
         glUniform2f(iResolutionLocationCompute, (float)screenWidth, (float)screenHeight);
@@ -308,7 +313,20 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         glUniform2f(iResolutionLocation, (float)screenWidth, (float)screenHeight);
         glBindVertexArray(vertexArray);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffers[1-currentBuffer]);
+
+        GLint mousePosLoc = glGetUniformLocation(program, "mousePos");
+        GLint isCursorLoc = glGetUniformLocation(program, "isCursor");
+        glUniform2f(mousePosLoc, mouseX, mouseY);
+
+        // Draw particles first
+        glUniform1i(isCursorLoc, 0);
         glDrawArraysInstanced(GL_POINTS, 0, 1, NUM_PARTICLES);
+
+        // Then draw cursor (red dot) on top
+        glUniform1i(isCursorLoc, 1);
+        glPointSize(10.0f);  // Set a larger point size for the cursor
+        glDrawArraysInstanced(GL_POINTS, 0, 1, 1);
+        glPointSize(1.0f);  // Reset point size for particles in the next frame
 
         SwapBuffers(hdc);
         currentBuffer = 1 - currentBuffer;
