@@ -21,9 +21,29 @@ uniform float maxAcceleration = 5.0;
 uniform float velocityDamping = 0.999;
 uniform float bounceCoefficient = 0.8;
 
+// Random number generation
+uint seed = 0;
+uint wang_hash(uint seed) {
+    seed = (seed ^ 61) ^ (seed >> 16);
+    seed *= 9;
+    seed = seed ^ (seed >> 4);
+    seed *= 0x27d4eb2d;
+    seed = seed ^ (seed >> 15);
+    return seed;
+}
+
+float randomFloat() {
+    seed = wang_hash(seed);
+    return float(seed) / 4294967295.0;
+}
+
 void main() {
     uint gid = gl_GlobalInvocationID.x;
+    
+    // Early exit if this thread is beyond the number of particles
     if (gid >= particlesIn.length()) return;
+    
+    seed = gid + uint(deltaTime * 1000000.0);  // Ensure different random sequences for each particle and frame
     
     vec2 position = particlesIn[gid].xy;
     vec2 velocity = particlesIn[gid].zw;
@@ -32,19 +52,29 @@ void main() {
     
     vec2 direction = normalizedMouse - position;
     float distance = length(direction);
-    vec2 acceleration = normalize(direction) * min(attractionStrength / (distance * distance + 0.1), maxAcceleration);
+    
+    // Add small random movement to prevent sticking
+    vec2 randomMovement = vec2(randomFloat() - 0.5, randomFloat() - 0.5) * 0.001;
+    
+    vec2 acceleration = normalize(direction + randomMovement) * min(attractionStrength / (distance * distance + 0.1), maxAcceleration);
     
     velocity += acceleration * deltaTime;
     velocity *= velocityDamping;
     position += velocity * deltaTime;
     
+    // Boundary checks with small random offset
     if (abs(position.x) > 1.0) {
-        position.x = sign(position.x) * 1.0;
+        position.x = sign(position.x) * (1.0 - randomFloat() * 0.01);
         velocity.x *= -bounceCoefficient;
     }
     if (abs(position.y) > 1.0) {
-        position.y = sign(position.y) * 1.0;
+        position.y = sign(position.y) * (1.0 - randomFloat() * 0.01);
         velocity.y *= -bounceCoefficient;
+    }
+    
+    // Ensure velocity is not too small
+    if (length(velocity) < 0.001) {
+        velocity = vec2(randomFloat() - 0.5, randomFloat() - 0.5) * 0.01;
     }
     
     particlesOut[gid] = vec4(position, velocity);

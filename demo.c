@@ -86,7 +86,7 @@ GLuint computeProgram;
 GLuint particleBuffer;
 GLint mousePositionLocation;
 GLint deltaTimeLocation;
-const int NUM_PARTICLES = 100000; // We'll start with 1 million and scale up
+const int NUM_PARTICLES = 10000000; // We'll start with 1 million and scale up
 const int WORK_GROUP_SIZE = 256;
 GLuint iResolutionLocationCompute;
 GLuint vertexArray;
@@ -292,7 +292,11 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         glUniform2f(iResolutionLocationCompute, (float)screenWidth, (float)screenHeight);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffers[currentBuffer]);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, particleBuffers[1-currentBuffer]);
-        glDispatchCompute(NUM_PARTICLES / WORK_GROUP_SIZE, 1, 1);
+
+        // Calculate the number of work groups needed
+        int numWorkGroups = (NUM_PARTICLES + WORK_GROUP_SIZE - 1) / WORK_GROUP_SIZE;
+        glDispatchCompute(numWorkGroups, 1, 1);
+
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
         // Render particles
