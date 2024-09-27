@@ -2,29 +2,35 @@
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 0) buffer ParticleBuffer {
-    vec4 particles[];
+layout(std430, binding = 0) buffer ParticleBufferIn {
+    vec4 particlesIn[];
+};
+
+layout(std430, binding = 1) buffer ParticleBufferOut {
+    vec4 particlesOut[];
 };
 
 uniform vec2 mousePosition;
 uniform float deltaTime;
+uniform vec2 iResolution;
 
 void main() {
     uint gid = gl_GlobalInvocationID.x;
+    if (gid >= particlesIn.length()) return;
     
-    vec2 position = particles[gid].xy;
-    vec2 velocity = particles[gid].zw;
+    vec2 position = particlesIn[gid].xy;
+    vec2 velocity = particlesIn[gid].zw;
     
-    // Simple attraction to mouse
-    vec2 direction = mousePosition - position;
+    vec2 normalizedMouse = (mousePosition / iResolution) * 2.0 - 1.0;
+    
+    vec2 direction = normalizedMouse - position;
     float distance = length(direction);
-    vec2 acceleration = normalize(direction) * min(5.0 / (distance * distance + 0.1), 10.0); // Adjust attraction strength
+    vec2 acceleration = normalize(direction) * min(2.0 / (distance * distance + 0.1), 5.0);
     
     velocity += acceleration * deltaTime;
-    velocity *= 0.99; // Add some damping
+    velocity *= 0.99;
     position += velocity * deltaTime;
     
-    // Bounce off screen edges
     if (abs(position.x) > 1.0) {
         position.x = sign(position.x) * 1.0;
         velocity.x *= -0.8;
@@ -34,6 +40,5 @@ void main() {
         velocity.y *= -0.8;
     }
     
-    // Update particle data
-    particles[gid] = vec4(position, velocity);
+    particlesOut[gid] = vec4(position, velocity);
 }
