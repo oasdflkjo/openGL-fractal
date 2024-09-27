@@ -306,7 +306,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
         // Render particles
         glClear(GL_COLOR_BUFFER_BIT);
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);  // Set clear color to black
+        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);  // Set clear color to grey
         glUseProgram(program);
         float currentTimeSeconds = GetTickCount() / 1000.0f - startTime;
         glUniform1f(iTimeLocation, currentTimeSeconds);
