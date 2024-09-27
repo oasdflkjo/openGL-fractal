@@ -3,32 +3,26 @@
 uniform float iTime;
 uniform vec2 iResolution;
 
-out vec4 FragColor;
+layout(std430, binding = 0) buffer ParticleBuffer {
+    vec4 particles[];
+};
 
-const float ZOOM_SPEED = 0.5;
-const vec2 MANDELBROT_CENTER = vec2(-0.74543, 0.11301);
-const float ESCAPE_RADIUS = 2.0;
-const float MAX_ITERATIONS = 300.0;
+out vec4 fragColor;
 
 void main() {
-    vec2 uv = (gl_FragCoord.xy - iResolution * 0.5) / iResolution.y;
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    vec3 color = vec3(0.0);
 
-    float zoom = exp(iTime * ZOOM_SPEED);
-
-    vec2 c = MANDELBROT_CENTER + uv / zoom;
-
-    vec2 z = vec2(0.0);
-    float iterations = 0.0;
-
-    for (float i = 0.0; i < MAX_ITERATIONS; i++) {
-        z = vec2(
-            z.x * z.x - z.y * z.y + c.x,
-            2.0 * z.x * z.y + c.y
-        );
-        if (length(z) > ESCAPE_RADIUS) break;
-        iterations = i;
+    for (int i = 0; i < 10000; i++) { // Make sure this matches NUM_PARTICLES
+        vec2 particlePos = particles[i].xy * 0.5 + 0.5; // Convert from -1,1 to 0,1 range
+        float distance = length(uv - particlePos);
+        if (distance < 0.005) {
+            color += vec3(1.0, 0.5, 0.2) * (1.0 - distance / 0.005);
+        }
     }
 
-    float color = iterations / MAX_ITERATIONS;
-    FragColor = vec4(vec3(color), 1.0);
+    // Add a subtle background glow
+    color += vec3(0.1, 0.05, 0.2) * (1.0 - length(uv - 0.5));
+
+    fragColor = vec4(color, 1.0);
 }

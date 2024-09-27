@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <GL/glext.h>
 #include <GL/wglext.h>
+#include <stdlib.h>
+#include <time.h>
 
 // Global variable declarations
 GLint iTimeLocation;
@@ -34,6 +36,16 @@ PFNGLUSEPROGRAMPROC glUseProgram;
 PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
 PFNGLUNIFORM1FPROC glUniform1f;
 PFNGLUNIFORM2FPROC glUniform2f;
+PFNGLCREATEPROGRAMPROC glCreateProgram;
+PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
+PFNGLMEMORYBARRIERPROC glMemoryBarrier;
+PFNGLGENBUFFERSPROC glGenBuffers;
+PFNGLBINDBUFFERPROC glBindBuffer;
+PFNGLBUFFERDATAPROC glBufferData;
+PFNGLBINDBUFFERBASEPROC glBindBufferBase;
+PFNGLBUFFERSUBDATAPROC glBufferSubData;
+PFNGLMAPBUFFERPROC glMapBuffer;
+PFNGLUNMAPBUFFERPROC glUnmapBuffer;
 
 // Function declarations
 void LoadOpenGLFunctions();
@@ -63,6 +75,13 @@ PIXELFORMATDESCRIPTOR pfd = {
     0, 0, 0
 };
 
+// Add these global variables
+GLuint computeProgram;
+GLuint particleBuffer;
+GLint mousePositionLocation;
+GLint deltaTimeLocation;
+const int NUM_PARTICLES = 10000; // Adjust as needed
+
 void LoadOpenGLFunctions() {
     glCreateShader = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
     glShaderSource = (PFNGLSHADERSOURCEPROC)wglGetProcAddress("glShaderSource");
@@ -83,6 +102,18 @@ void LoadOpenGLFunctions() {
     if (wglSwapIntervalEXT) {
         wglSwapIntervalEXT(1); // Enable vsync
     }
+    
+    // Add these new function pointers
+    glCreateProgram = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
+    glDispatchCompute = (PFNGLDISPATCHCOMPUTEPROC)wglGetProcAddress("glDispatchCompute");
+    glMemoryBarrier = (PFNGLMEMORYBARRIERPROC)wglGetProcAddress("glMemoryBarrier");
+    glGenBuffers = (PFNGLGENBUFFERSPROC)wglGetProcAddress("glGenBuffers");
+    glBindBuffer = (PFNGLBINDBUFFERPROC)wglGetProcAddress("glBindBuffer");
+    glBufferData = (PFNGLBUFFERDATAPROC)wglGetProcAddress("glBufferData");
+    glBindBufferBase = (PFNGLBINDBUFFERBASEPROC)wglGetProcAddress("glBindBufferBase");
+    glBufferSubData = (PFNGLBUFFERSUBDATAPROC)wglGetProcAddress("glBufferSubData");
+    glMapBuffer = (PFNGLMAPBUFFERPROC)wglGetProcAddress("glMapBuffer");
+    glUnmapBuffer = (PFNGLUNMAPBUFFERPROC)wglGetProcAddress("glUnmapBuffer");
 }
 
 char* LoadShader(const char *filename) {
@@ -138,6 +169,26 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     ShowCursor(FALSE);
 
+    // Initialize random seed
+    srand(time(NULL));
+
+    // Set up particle buffer
+    glGenBuffers(1, &particleBuffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(float) * 4, NULL, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffer);
+
+    // Initialize particles with random positions
+    float *initialParticleData = (float*)malloc(NUM_PARTICLES * 4 * sizeof(float));
+    for (int i = 0; i < NUM_PARTICLES; i++) {
+        initialParticleData[i*4] = (float)rand() / RAND_MAX * 2.0f - 1.0f; // x: -1 to 1
+        initialParticleData[i*4+1] = (float)rand() / RAND_MAX * 2.0f - 1.0f; // y: -1 to 1
+        initialParticleData[i*4+2] = 0.0f; // vx
+        initialParticleData[i*4+3] = 0.0f; // vy
+    }
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, NUM_PARTICLES * 4 * sizeof(float), initialParticleData);
+    free(initialParticleData);
+
     char *fragmentShaderSource = LoadShader("shader.frag");
     if (!fragmentShaderSource) {
         return -1;
@@ -156,6 +207,20 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     QueryPerformanceFrequency(&frequency);
     QueryPerformanceCounter(&lastTime);
 
+    // Load compute shader
+    char *computeShaderSource = LoadShader("particle_update.comp");
+    if (!computeShaderSource) {
+        return -1;
+    }
+    GLuint computeShader = CompileShader(computeShaderSource, GL_COMPUTE_SHADER);
+    computeProgram = glCreateProgram();
+    glAttachShader(computeProgram, computeShader);
+    glLinkProgram(computeProgram);
+    CheckProgramLinkStatus(computeProgram);
+    mousePositionLocation = glGetUniformLocation(computeProgram, "mousePosition");
+    deltaTimeLocation = glGetUniformLocation(computeProgram, "deltaTime");
+    free(computeShaderSource);
+
     MSG msg;
     while (!GetAsyncKeyState(VK_ESCAPE)) {
         if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
@@ -167,6 +232,21 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         float deltaTime = (float)(currentTime.QuadPart - lastTime.QuadPart) / frequency.QuadPart;
 
         if (deltaTime >= targetFrameTime) {
+            // Update particle positions using compute shader
+            glUseProgram(computeProgram);
+            
+            // Get mouse position
+            POINT mousePos;
+            GetCursorPos(&mousePos);
+            ScreenToClient(hwnd, &mousePos);
+            glUniform2f(mousePositionLocation, (float)mousePos.x / screenWidth * 2.0f - 1.0f, 1.0f - (float)mousePos.y / screenHeight * 2.0f);
+            
+            glUniform1f(deltaTimeLocation, deltaTime);
+            glDispatchCompute(NUM_PARTICLES / 256, 1, 1);
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+            // Render particles
+            glUseProgram(program);
             float currentTimeSeconds = GetTickCount() / 1000.0f - startTime;
             glUniform1f(iTimeLocation, currentTimeSeconds);
             glUniform2f(iResolutionLocation, (float)screenWidth, (float)screenHeight);
