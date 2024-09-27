@@ -1,5 +1,11 @@
 #version 430
 
+// Parameters for easy tweaking
+#define ATTRACTION_STRENGTH 9900.0
+#define WIGGLE_STRENGTH 10.0
+#define BOUNCE_DAMPING 0.9
+#define DRAG_COEFFICIENT 0.2  // New parameter for drag
+
 layout(local_size_x = 256) in;
 
 layout(std430, binding = 0) buffer ParticleIn {
@@ -13,6 +19,12 @@ layout(std430, binding = 1) buffer ParticleOut {
 uniform vec2 mousePosition;
 uniform float deltaTime;
 uniform vec2 iResolution;
+uniform float randomSeed;
+
+// Hash function for pseudo-random number generation
+float hash(float n) {
+    return fract(sin(n) * 43758.5453);
+}
 
 void main() {
     uint gid = gl_GlobalInvocationID.x;
@@ -23,7 +35,12 @@ void main() {
 
     // Update velocity (attract to mouse)
     vec2 toMouse = mousePosition - pos;
-    vel += normalize(toMouse) * deltaTime * 100.0; // Increased attraction strength
+    vel += normalize(toMouse) * deltaTime * ATTRACTION_STRENGTH;
+
+    // Add random wiggle
+    float randomAngle = hash(float(gid) + randomSeed) * 2.0 * 3.14159;
+    vec2 randomDir = vec2(cos(randomAngle), sin(randomAngle));
+    vel += randomDir * deltaTime * WIGGLE_STRENGTH;
 
     // Update position
     pos += vel * deltaTime;
@@ -31,11 +48,11 @@ void main() {
     // Bounce off edges
     if(pos.x < 0 || pos.x > iResolution.x) {
         pos.x = clamp(pos.x, 0, iResolution.x);
-        vel.x *= -0.9;
+        vel.x *= -BOUNCE_DAMPING;
     }
     if(pos.y < 0 || pos.y > iResolution.y) {
         pos.y = clamp(pos.y, 0, iResolution.y);
-        vel.y *= -0.9;
+        vel.y *= -BOUNCE_DAMPING;
     }
 
     particlesOut[gid] = vec4(pos, vel);
