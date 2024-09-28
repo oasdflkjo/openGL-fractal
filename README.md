@@ -37,4 +37,4 @@ Note: While Windows includes some OpenGL support by default, you may need to ins
 2. Open a command prompt in the project directory.
 3. Run the following command to compile the project:
 
-gcc -std=c11 -Os -s -mwindows -Wall demo.c -o demo.exe -lopengl32 -lgdi32 -lwinmm -lglu32
+gcc -std=c11 -Os -s -mwindows -Wall -I. demo.c shader_utils.c -o demo.exe -lopengl32 -lgdi32 -lwinmm -lglu32

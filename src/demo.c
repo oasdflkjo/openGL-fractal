@@ -8,6 +8,7 @@
 #include <math.h>
 
 #include "shader_utils.h"
+#include "gl_loader.h"
 
 // Global variable declarations
 GLint iTimeLocation;
@@ -20,41 +21,16 @@ LARGE_INTEGER currentTime;
 // Function pointer declarations
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(int interval);
 
-// OpenGL function pointers
-PFNGLCREATESHADERPROC glCreateShader;
-PFNGLSHADERSOURCEPROC glShaderSource;
-PFNGLCOMPILESHADERPROC glCompileShader;
-PFNGLGETSHADERIVPROC glGetShaderiv;
-PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
-PFNGLGETPROGRAMIVPROC glGetProgramiv;
-PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
-PFNGLCREATEPROGRAMPROC glCreateProgram;
-PFNGLATTACHSHADERPROC glAttachShader;
-PFNGLLINKPROGRAMPROC glLinkProgram;
-PFNGLUSEPROGRAMPROC glUseProgram;
-PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
-PFNGLUNIFORM1FPROC glUniform1f;
-PFNGLUNIFORM2FPROC glUniform2f;
-PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
-PFNGLMEMORYBARRIERPROC glMemoryBarrier;
-PFNGLGENBUFFERSPROC glGenBuffers;
-PFNGLBINDBUFFERPROC glBindBuffer;
-PFNGLBUFFERDATAPROC glBufferData;
-PFNGLBINDBUFFERBASEPROC glBindBufferBase;
-PFNGLBUFFERSUBDATAPROC glBufferSubData;
-PFNGLMAPBUFFERPROC glMapBuffer;
-PFNGLUNMAPBUFFERPROC glUnmapBuffer;
-PFNGLDRAWARRAYSINSTANCEDPROC glDrawArraysInstanced;
-PFNGLVERTEXATTRIBDIVISORPROC glVertexAttribDivisor;
-PFNGLGENVERTEXARRAYSPROC glGenVertexArrays;
-PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
-PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
-PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
-PFNGLUNIFORM1IPROC glUniform1i;
-
-// Function declarations
-void LoadOpenGLFunctions();
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+// Add these global variables
+GLuint computeProgram;
+GLint mousePositionLocation;
+GLint deltaTimeLocation;
+const int NUM_PARTICLES = 10000000;
+const int WORK_GROUP_SIZE = 256;
+GLuint iResolutionLocationCompute;
+GLuint vertexArray;
+GLuint vertexBuffer;
+float mouseX = 0.0f, mouseY = 0.0f;
 
 // Pixel format descriptor
 PIXELFORMATDESCRIPTOR pfd = {
@@ -75,56 +51,6 @@ PIXELFORMATDESCRIPTOR pfd = {
     0,
     0, 0, 0
 };
-
-// Add these global variables
-GLuint computeProgram;
-GLint mousePositionLocation;
-GLint deltaTimeLocation;
-const int NUM_PARTICLES = 10000000;
-const int WORK_GROUP_SIZE = 256;
-GLuint iResolutionLocationCompute;
-GLuint vertexArray;
-GLuint vertexBuffer;
-float mouseX = 0.0f, mouseY = 0.0f;
-
-void LoadOpenGLFunctions() {
-    glCreateShader = (PFNGLCREATESHADERPROC)wglGetProcAddress("glCreateShader");
-    glShaderSource = (PFNGLSHADERSOURCEPROC)wglGetProcAddress("glShaderSource");
-    glCompileShader = (PFNGLCOMPILESHADERPROC)wglGetProcAddress("glCompileShader");
-    glCreateProgram = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
-    glAttachShader = (PFNGLATTACHSHADERPROC)wglGetProcAddress("glAttachShader");
-    glLinkProgram = (PFNGLLINKPROGRAMPROC)wglGetProcAddress("glLinkProgram");
-    glUseProgram = (PFNGLUSEPROGRAMPROC)wglGetProcAddress("glUseProgram");
-    glGetUniformLocation = (PFNGLGETUNIFORMLOCATIONPROC)wglGetProcAddress("glGetUniformLocation");
-    glUniform1f = (PFNGLUNIFORM1FPROC)wglGetProcAddress("glUniform1f");
-    glUniform2f = (PFNGLUNIFORM2FPROC)wglGetProcAddress("glUniform2f");
-    PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
-    glGetShaderiv = (PFNGLGETSHADERIVPROC)wglGetProcAddress("glGetShaderiv");
-    glGetShaderInfoLog = (PFNGLGETSHADERINFOLOGPROC)wglGetProcAddress("glGetShaderInfoLog");
-    glGetProgramiv = (PFNGLGETPROGRAMIVPROC)wglGetProcAddress("glGetProgramiv");
-    glGetProgramInfoLog = (PFNGLGETPROGRAMINFOLOGPROC)wglGetProcAddress("glGetProgramInfoLog");
-    
-    if (wglSwapIntervalEXT) {
-        wglSwapIntervalEXT(1); // Enable vsync
-    }
-    
-    glDispatchCompute = (PFNGLDISPATCHCOMPUTEPROC)wglGetProcAddress("glDispatchCompute");
-    glMemoryBarrier = (PFNGLMEMORYBARRIERPROC)wglGetProcAddress("glMemoryBarrier");
-    glGenBuffers = (PFNGLGENBUFFERSPROC)wglGetProcAddress("glGenBuffers");
-    glBindBuffer = (PFNGLBINDBUFFERPROC)wglGetProcAddress("glBindBuffer");
-    glBufferData = (PFNGLBUFFERDATAPROC)wglGetProcAddress("glBufferData");
-    glBindBufferBase = (PFNGLBINDBUFFERBASEPROC)wglGetProcAddress("glBindBufferBase");
-    glBufferSubData = (PFNGLBUFFERSUBDATAPROC)wglGetProcAddress("glBufferSubData");
-    glMapBuffer = (PFNGLMAPBUFFERPROC)wglGetProcAddress("glMapBuffer");
-    glUnmapBuffer = (PFNGLUNMAPBUFFERPROC)wglGetProcAddress("glUnmapBuffer");
-    glDrawArraysInstanced = (PFNGLDRAWARRAYSINSTANCEDPROC)wglGetProcAddress("glDrawArraysInstanced");
-    glVertexAttribDivisor = (PFNGLVERTEXATTRIBDIVISORPROC)wglGetProcAddress("glVertexAttribDivisor");
-    glGenVertexArrays = (PFNGLGENVERTEXARRAYSPROC)wglGetProcAddress("glGenVertexArrays");
-    glBindVertexArray = (PFNGLBINDVERTEXARRAYPROC)wglGetProcAddress("glBindVertexArray");
-    glEnableVertexAttribArray = (PFNGLENABLEVERTEXATTRIBARRAYPROC)wglGetProcAddress("glEnableVertexAttribArray");
-    glVertexAttribPointer = (PFNGLVERTEXATTRIBPOINTERPROC)wglGetProcAddress("glVertexAttribPointer");
-    glUniform1i = (PFNGLUNIFORM1IPROC)wglGetProcAddress("glUniform1i");
-}
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if (uMsg == WM_CLOSE || (uMsg == WM_KEYDOWN && wParam == VK_ESCAPE)) {
@@ -155,7 +81,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     wglMakeCurrent(hdc, hglrc);
 
     LoadOpenGLFunctions();
-    LoadShaderUtilsFunctions();  // Add this line
+    LoadShaderUtilsFunctions();
 
     ShowCursor(FALSE);
 
@@ -199,7 +125,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
     glVertexAttribDivisor(0, 0);
 
-    char *fragmentShaderSource = LoadShader("shader.frag");
+    // Update this function call to include the shader directory
+    char *fragmentShaderSource = LoadShader("shaders/shader.frag");
     if (!fragmentShaderSource) {
         return -1;
     }
@@ -207,7 +134,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     GLuint program = glCreateProgram();
     glAttachShader(program, shader);
 
-    char *vertexShaderSource = LoadShader("shader.vert");
+    // Update this function call as well
+    char *vertexShaderSource = LoadShader("shaders/shader.vert");
     if (!vertexShaderSource) {
         return -1;
     }
@@ -227,7 +155,8 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     QueryPerformanceCounter(&lastTime);
 
     // Load compute shader
-    char *computeShaderSource = LoadShader("particle_update.comp");
+    // Update this function call for the compute shader
+    char *computeShaderSource = LoadShader("shaders/particle_update.comp");
     if (!computeShaderSource) {
         return -1;
     }
@@ -235,7 +164,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     computeProgram = glCreateProgram();
     glAttachShader(computeProgram, computeShader);
     glLinkProgram(computeProgram);
-    CheckProgramLinkStatus(computeProgram);
     mousePositionLocation = glGetUniformLocation(computeProgram, "mousePosition");
     deltaTimeLocation = glGetUniformLocation(computeProgram, "deltaTime");
     iResolutionLocationCompute = glGetUniformLocation(computeProgram, "iResolution");
