@@ -14,6 +14,7 @@ extern PFNGLGETSHADERIVPROC glGetShaderiv;
 extern PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
 extern PFNGLGETPROGRAMIVPROC glGetProgramiv;
 extern PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
+extern PFNGLDELETESHADERPROC glDeleteShader;
 extern PFNGLCREATEPROGRAMPROC glCreateProgram;
 extern PFNGLATTACHSHADERPROC glAttachShader;
 extern PFNGLLINKPROGRAMPROC glLinkProgram;
@@ -37,6 +38,12 @@ extern PFNGLBINDVERTEXARRAYPROC glBindVertexArray;
 extern PFNGLENABLEVERTEXATTRIBARRAYPROC glEnableVertexAttribArray;
 extern PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer;
 extern PFNGLUNIFORM1IPROC glUniform1i;
+extern PFNGLTEXSTORAGE2DPROC glTexStorage2D;
+extern PFNGLBINDIMAGETEXTUREPROC glBindImageTexture;
+extern PFNGLCLEARTEXIMAGEPROC glClearTexImage;
+
+// Add this line with the other function pointer declarations
+extern PFNGLGETACTIVEUNIFORMPROC glGetActiveUniform;
 
 void LoadOpenGLFunctions();
 

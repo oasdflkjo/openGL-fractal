@@ -13,10 +13,11 @@ extern PFNGLGETSHADERIVPROC glGetShaderiv;
 extern PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
 extern PFNGLGETPROGRAMIVPROC glGetProgramiv;
 extern PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
+extern PFNGLDELETESHADERPROC glDeleteShader;  // Add this line
 
 void LoadShaderUtilsFunctions();
 char* LoadShader(const char *filename);
-GLuint CompileShader(const char *source, GLenum type);
+GLuint CompileShader(const char *source, GLenum type, const char *filename);
 void CheckShaderCompileStatus(GLuint shader);
 void CheckProgramLinkStatus(GLuint program);
 

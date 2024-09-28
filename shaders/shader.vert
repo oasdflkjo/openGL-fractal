@@ -11,13 +11,15 @@ uniform vec2 mousePos;
 uniform int isCursor;
 
 void main() {
+    vec2 pos;
     if (isCursor == 1) {
-        vec2 cursorPos = (mousePos / iResolution) * 2.0 - 1.0;
-        gl_Position = vec4(cursorPos, 0.0, 1.0);
+        pos = mousePos;
     } else {
-        vec2 particlePos = particles[gl_InstanceID].xy;
-        vec2 normalizedPos = (particlePos / iResolution) * 2.0 - 1.0;
-        gl_Position = vec4(normalizedPos, 0.0, 1.0);
+        pos = particles[gl_InstanceID].xy;
     }
-    gl_PointSize = 2.0;
+    
+    // Transform from screen space to clip space
+    vec2 clipPos = (pos / iResolution) * 2.0 - 1.0;
+    clipPos.y = -clipPos.y; // Flip Y coordinate for OpenGL
+    gl_Position = vec4(clipPos, 0.0, 1.0);
 }

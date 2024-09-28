@@ -2,7 +2,7 @@
 CC = gcc
 
 # Compiler flags
-CFLAGS = -std=c11 -Os -s -mwindows -Wall -Iinclude
+CFLAGS = -std=c11 -Os -s -Wall -Iinclude
 
 # Linker flags
 LDFLAGS = -lopengl32 -lgdi32 -lwinmm -lglu32
