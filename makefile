@@ -38,8 +38,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 
 # Clean target
 clean:
-	rmdir /s /q $(BUILD_DIR)
-	del $(EXECUTABLE)
+	$(RM) -r $(BUILD_DIR)
+	$(RM) $(EXECUTABLE)
 
 # Phony targets
 .PHONY: all clean
