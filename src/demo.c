@@ -1,8 +1,6 @@
 #include <windows.h>
 #include <GL/gl.h>
 #include <stdio.h>
-#include <GL/glext.h>
-#include <GL/wglext.h>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
@@ -13,10 +11,6 @@
 // Global variable declarations
 GLint iTimeLocation;
 GLint iResolutionLocation;
-float startTime;
-LARGE_INTEGER frequency;
-LARGE_INTEGER lastTime;
-LARGE_INTEGER currentTime;
 
 // Function pointer declarations
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(int interval);
@@ -25,7 +19,7 @@ typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(int interval);
 GLuint computeProgram;
 GLint mousePositionLocation;
 GLint deltaTimeLocation;
-const int NUM_PARTICLES = 10000000;
+const int NUM_PARTICLES = 15000000;
 const int WORK_GROUP_SIZE = 256;
 GLuint iResolutionLocationCompute;
 GLuint vertexArray;
@@ -99,15 +93,19 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     // Initialize particles
     float *initialParticleData = (float*)malloc(NUM_PARTICLES * 4 * sizeof(float));
-    for (int i = 0; i < NUM_PARTICLES; i++) {
-        float angle = ((float)rand() / RAND_MAX) * 2.0f * 3.14159f;
-        float distance = sqrt((float)rand() / RAND_MAX) * (screenHeight / 2.0f);
-        
-        initialParticleData[i*4] = screenWidth / 2.0f + distance * cos(angle);  // x
-        initialParticleData[i*4+1] = screenHeight / 2.0f + distance * sin(angle);  // y
-        initialParticleData[i*4+2] = 0.0f;  // vx
-        initialParticleData[i*4+3] = 0.0f;  // vy
+    float ySpacing = 2.0f;  // Vertical spacing between rows
+    int currentParticle = 0;
+
+    for (float y = 0; currentParticle < NUM_PARTICLES; y += ySpacing) {
+        for (float x = 0; x < screenWidth && currentParticle < NUM_PARTICLES; x += 2.0f) {
+            initialParticleData[currentParticle*4] = x;  // x
+            initialParticleData[currentParticle*4+1] = screenHeight - y;  // y (start from top)
+            initialParticleData[currentParticle*4+2] = 0.0f;  // vx
+            initialParticleData[currentParticle*4+3] = 0.0f;  // vy
+            currentParticle++;
+        }
     }
+
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffers[0]);
     glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, NUM_PARTICLES * 4 * sizeof(float), initialParticleData);
     free(initialParticleData);
@@ -147,12 +145,9 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     glUseProgram(program);
     iTimeLocation = glGetUniformLocation(program, "iTime");
     iResolutionLocation = glGetUniformLocation(program, "iResolution");
-    startTime = GetTickCount() / 1000.0f;
+    // startTime = GetTickCount() / 1000.0f;
     free(fragmentShaderSource);
     free(vertexShaderSource);
-
-    QueryPerformanceFrequency(&frequency);
-    QueryPerformanceCounter(&lastTime);
 
     // Load compute shader
     // Update this function call for the compute shader
@@ -173,16 +168,17 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     MSG msg;
-    int frameCount = 0;
-    int currentBuffer = 0;
+    DWORD lastTime = GetTickCount();
+    int currentBuffer = 0;  // Add this line to declare currentBuffer
     while (!GetAsyncKeyState(VK_ESCAPE)) {
         if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
 
-        QueryPerformanceCounter(&currentTime);
-        float deltaTime = (float)(currentTime.QuadPart - lastTime.QuadPart) / frequency.QuadPart;
+        DWORD currentTime = GetTickCount();
+        float deltaTime = (currentTime - lastTime) / 1000.0f;
+        lastTime = currentTime;
 
         // Update particles
         glUseProgram(computeProgram);
@@ -211,8 +207,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
         glClear(GL_COLOR_BUFFER_BIT);
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);  // Set clear color to grey
         glUseProgram(program);
-        float currentTimeSeconds = GetTickCount() / 1000.0f - startTime;
-        glUniform1f(iTimeLocation, currentTimeSeconds);
+        glUniform1f(iTimeLocation, deltaTime);
         glUniform2f(iResolutionLocation, (float)screenWidth, (float)screenHeight);
         glUniform1f(glGetUniformLocation(program, "aspectRatio"), (float)screenWidth / screenHeight);
         glBindVertexArray(vertexArray);
@@ -234,14 +229,6 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
         SwapBuffers(hdc);
         currentBuffer = 1 - currentBuffer;
-
-        lastTime = currentTime;
-        frameCount++;
-
-        // Debug output
-        if (frameCount % 60 == 0) {
-            printf("Frame: %d, Mouse: (%ld, %ld), DeltaTime: %f\n", frameCount, mousePos.x, mousePos.y, deltaTime);
-        }
 
         // Check for OpenGL errors
         GLenum err;

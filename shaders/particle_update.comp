@@ -1,10 +1,9 @@
 #version 430
 
 // Parameters for easy tweaking
-#define ATTRACTION_STRENGTH 3000.0
-#define WIGGLE_STRENGTH 1000.0
-#define BOUNCE_DAMPING 0.9
-#define DRAG_COEFFICIENT 1000000.9  // New parameter for drag
+#define ATTRACTION_STRENGTH 1000.0
+#define DRAG_COEFFICIENT 0.1
+//#define TUNNEL_STRENGTH 1.0
 
 layout(local_size_x = 256) in;
 
@@ -20,10 +19,17 @@ uniform vec2 mousePosition;
 uniform float deltaTime;
 uniform vec2 iResolution;
 uniform float randomSeed;
+uniform float time;
 
 // Hash function for pseudo-random number generation
 float hash(float n) {
     return fract(sin(n) * 43758.5453);
+}
+
+// 2D hash function
+vec2 hash2(vec2 p) {
+    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
 }
 
 void main() {
@@ -37,23 +43,15 @@ void main() {
     vec2 toMouse = mousePosition - pos;
     vel += normalize(toMouse) * deltaTime * ATTRACTION_STRENGTH;
 
-    // Add random wiggle
-    float randomAngle = hash(float(gid) + randomSeed) * 2.0 * 3.14159;
-    vec2 randomDir = vec2(cos(randomAngle), sin(randomAngle));
-    vel += randomDir * deltaTime * WIGGLE_STRENGTH;
+    // Apply drag force
+    vel -= vel * DRAG_COEFFICIENT * deltaTime;
 
     // Update position
     pos += vel * deltaTime;
 
-    // Bounce off edges
-    if(pos.x < 0 || pos.x > iResolution.x) {
-        pos.x = clamp(pos.x, 0, iResolution.x);
-        vel.x *= -BOUNCE_DAMPING;
-    }
-    if(pos.y < 0 || pos.y > iResolution.y) {
-        pos.y = clamp(pos.y, 0, iResolution.y);
-        vel.y *= -BOUNCE_DAMPING;
-    }
+    // Apply random tunneling effect
+    //vec2 noise = hash2(pos + vec2(time, randomSeed));
+    //pos += noise * TUNNEL_STRENGTH;
 
     particlesOut[gid] = vec4(pos, vel);
 }
