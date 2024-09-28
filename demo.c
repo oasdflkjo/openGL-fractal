@@ -7,6 +7,8 @@
 #include <time.h>
 #include <math.h>
 
+#include "shader_utils.h"
+
 // Global variable declarations
 GLint iTimeLocation;
 GLint iResolutionLocation;
@@ -19,13 +21,13 @@ LARGE_INTEGER currentTime;
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(int interval);
 
 // OpenGL function pointers
+PFNGLCREATESHADERPROC glCreateShader;
+PFNGLSHADERSOURCEPROC glShaderSource;
+PFNGLCOMPILESHADERPROC glCompileShader;
 PFNGLGETSHADERIVPROC glGetShaderiv;
 PFNGLGETSHADERINFOLOGPROC glGetShaderInfoLog;
 PFNGLGETPROGRAMIVPROC glGetProgramiv;
 PFNGLGETPROGRAMINFOLOGPROC glGetProgramInfoLog;
-PFNGLCREATESHADERPROC glCreateShader;
-PFNGLSHADERSOURCEPROC glShaderSource;
-PFNGLCOMPILESHADERPROC glCompileShader;
 PFNGLCREATEPROGRAMPROC glCreateProgram;
 PFNGLATTACHSHADERPROC glAttachShader;
 PFNGLLINKPROGRAMPROC glLinkProgram;
@@ -52,10 +54,6 @@ PFNGLUNIFORM1IPROC glUniform1i;
 
 // Function declarations
 void LoadOpenGLFunctions();
-GLuint CompileShader(const char *source, GLenum type);
-void CheckShaderCompileStatus(GLuint shader);
-void CheckProgramLinkStatus(GLuint program);
-char* LoadShader(const char *filename);
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // Pixel format descriptor
@@ -128,27 +126,6 @@ void LoadOpenGLFunctions() {
     glUniform1i = (PFNGLUNIFORM1IPROC)wglGetProcAddress("glUniform1i");
 }
 
-char* LoadShader(const char *filename) {
-    FILE *file = fopen(filename, "r");
-    if (!file) {
-        fprintf(stderr, "Failed to open shader file: %s\n", filename);
-        return NULL;
-    }
-    fseek(file, 0, SEEK_END);
-    long length = ftell(file);
-    fseek(file, 0, SEEK_SET);
-    char *buffer = (char*)malloc(length + 1);
-    if (!buffer) {
-        fprintf(stderr, "Failed to allocate memory for shader file: %s\n", filename);
-        fclose(file);
-        return NULL;
-    }
-    fread(buffer, 1, length, file);
-    buffer[length] = '\0';
-    fclose(file);
-    return buffer;
-}
-
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     if (uMsg == WM_CLOSE || (uMsg == WM_KEYDOWN && wParam == VK_ESCAPE)) {
         PostQuitMessage(0);
@@ -178,6 +155,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     wglMakeCurrent(hdc, hglrc);
 
     LoadOpenGLFunctions();
+    LoadShaderUtilsFunctions();  // Add this line
 
     ShowCursor(FALSE);
 
@@ -350,32 +328,4 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     ChangeDisplaySettings(NULL, 0);
     ShowCursor(TRUE);
     ExitProcess(0);
-}
-
-GLuint CompileShader(const char *source, GLenum type) {
-    GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, NULL);
-    glCompileShader(shader);
-    CheckShaderCompileStatus(shader);
-    return shader;
-}
-
-void CheckShaderCompileStatus(GLuint shader) {
-    GLint success;
-    GLchar infoLog[512];
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(shader, 512, NULL, infoLog);
-        fprintf(stderr, "ERROR::SHADER::COMPILATION_FAILED\n%s\n", infoLog);
-    }
-}
-
-void CheckProgramLinkStatus(GLuint program) {
-    GLint success;
-    GLchar infoLog[512];
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(program, 512, NULL, infoLog);
-        fprintf(stderr, "ERROR::PROGRAM::LINKING_FAILED\n%s\n", infoLog);
-    }
 }
