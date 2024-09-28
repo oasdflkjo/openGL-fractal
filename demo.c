@@ -14,12 +14,8 @@ float startTime;
 LARGE_INTEGER frequency;
 LARGE_INTEGER lastTime;
 LARGE_INTEGER currentTime;
-const float targetFPS = 100.0f;
-const float targetFrameTime = 1.0f / targetFPS;
 
 // Function pointer declarations
-typedef HGLRC (WINAPI * PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int *attribList);
-typedef BOOL (WINAPI * PFNWGLCHOOSEPIXELFORMATARBPROC) (HDC hDC, const int *piAttribIList, const FLOAT *pfAttribFList, UINT nMaxFormats, int *piFormats, UINT *nNumFormats);
 typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(int interval);
 
 // OpenGL function pointers
@@ -37,7 +33,6 @@ PFNGLUSEPROGRAMPROC glUseProgram;
 PFNGLGETUNIFORMLOCATIONPROC glGetUniformLocation;
 PFNGLUNIFORM1FPROC glUniform1f;
 PFNGLUNIFORM2FPROC glUniform2f;
-PFNGLCREATEPROGRAMPROC glCreateProgram;
 PFNGLDISPATCHCOMPUTEPROC glDispatchCompute;
 PFNGLMEMORYBARRIERPROC glMemoryBarrier;
 PFNGLGENBUFFERSPROC glGenBuffers;
@@ -85,10 +80,9 @@ PIXELFORMATDESCRIPTOR pfd = {
 
 // Add these global variables
 GLuint computeProgram;
-GLuint particleBuffer;
 GLint mousePositionLocation;
 GLint deltaTimeLocation;
-const int NUM_PARTICLES = 10000000; // We'll start with 1 million and scale up
+const int NUM_PARTICLES = 10000000;
 const int WORK_GROUP_SIZE = 256;
 GLuint iResolutionLocationCompute;
 GLuint vertexArray;
@@ -116,8 +110,6 @@ void LoadOpenGLFunctions() {
         wglSwapIntervalEXT(1); // Enable vsync
     }
     
-    // Add these new function pointers
-    glCreateProgram = (PFNGLCREATEPROGRAMPROC)wglGetProcAddress("glCreateProgram");
     glDispatchCompute = (PFNGLDISPATCHCOMPUTEPROC)wglGetProcAddress("glDispatchCompute");
     glMemoryBarrier = (PFNGLMEMORYBARRIERPROC)wglGetProcAddress("glMemoryBarrier");
     glGenBuffers = (PFNGLGENBUFFERSPROC)wglGetProcAddress("glGenBuffers");
