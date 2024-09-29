@@ -54,25 +54,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
 
+// New function declarations
+void SetupFullscreenWindow(HWND *hwnd, HDC *hdc, int *screenWidth, int *screenHeight, HINSTANCE hInstance);
+void InitializeOpenGL(HDC hdc, HGLRC *hglrc);
+void InitializeParticles(GLuint *particleBuffers, int screenWidth, int screenHeight);
+
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    DEVMODE screenSettings = {0};
-    screenSettings.dmSize = sizeof(screenSettings);
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    screenSettings.dmPelsWidth = screenWidth;
-    screenSettings.dmPelsHeight = screenHeight;
-    screenSettings.dmBitsPerPel = 32;
-    screenSettings.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
-    ChangeDisplaySettings(&screenSettings, CDS_FULLSCREEN);
+    HWND hwnd;
+    HDC hdc;
+    HGLRC hglrc;
+    int screenWidth, screenHeight;
 
-    HWND hwnd = CreateWindowEx(0, (LPCSTR)0xC018, 0, WS_POPUP | WS_VISIBLE, 0, 0, screenWidth, screenHeight, 0, 0, hInstance, 0);
-    HDC hdc = GetDC(hwnd);
-
-    int pf = ChoosePixelFormat(hdc, &pfd);
-    SetPixelFormat(hdc, pf, &pfd);
-
-    HGLRC hglrc = wglCreateContext(hdc);
-    wglMakeCurrent(hdc, hglrc);
+    SetupFullscreenWindow(&hwnd, &hdc, &screenWidth, &screenHeight, hInstance);
+    InitializeOpenGL(hdc, &hglrc);
 
     LoadOpenGLFunctions();
     LoadShaderUtilsFunctions();
@@ -84,31 +78,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     // Set up particle buffers (ping-pong)
     GLuint particleBuffers[2];
-    glGenBuffers(2, particleBuffers);
-    for (int i = 0; i < 2; i++) {
-        glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffers[i]);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(float) * 4, NULL, GL_DYNAMIC_DRAW);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, particleBuffers[i]);
-    }
-
-    // Initialize particles
-    float *initialParticleData = (float*)malloc(NUM_PARTICLES * 4 * sizeof(float));
-    float ySpacing = 2.0f;  // Vertical spacing between rows
-    int currentParticle = 0;
-
-    for (float y = 0; currentParticle < NUM_PARTICLES; y += ySpacing) {
-        for (float x = 0; x < screenWidth && currentParticle < NUM_PARTICLES; x += 2.0f) {
-            initialParticleData[currentParticle*4] = x;  // x
-            initialParticleData[currentParticle*4+1] = screenHeight - y;  // y (start from top)
-            initialParticleData[currentParticle*4+2] = 0.0f;  // vx
-            initialParticleData[currentParticle*4+3] = 0.0f;  // vy
-            currentParticle++;
-        }
-    }
-
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffers[0]);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, NUM_PARTICLES * 4 * sizeof(float), initialParticleData);
-    free(initialParticleData);
+    InitializeParticles(particleBuffers, screenWidth, screenHeight);
 
     // Set up vertex array and buffer for instanced rendering
     glGenVertexArrays(1, &vertexArray);
@@ -243,4 +213,54 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     ChangeDisplaySettings(NULL, 0);
     ShowCursor(TRUE);
     ExitProcess(0);
+}
+
+void SetupFullscreenWindow(HWND *hwnd, HDC *hdc, int *screenWidth, int *screenHeight, HINSTANCE hInstance) {
+    DEVMODE screenSettings = {0};
+    screenSettings.dmSize = sizeof(screenSettings);
+    *screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    *screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    screenSettings.dmPelsWidth = *screenWidth;
+    screenSettings.dmPelsHeight = *screenHeight;
+    screenSettings.dmBitsPerPel = 32;
+    screenSettings.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
+    ChangeDisplaySettings(&screenSettings, CDS_FULLSCREEN);
+
+    *hwnd = CreateWindowEx(0, (LPCSTR)0xC018, 0, WS_POPUP | WS_VISIBLE, 0, 0, *screenWidth, *screenHeight, 0, 0, hInstance, 0);
+    *hdc = GetDC(*hwnd);
+}
+
+void InitializeOpenGL(HDC hdc, HGLRC *hglrc) {
+    int pf = ChoosePixelFormat(hdc, &pfd);
+    SetPixelFormat(hdc, pf, &pfd);
+
+    *hglrc = wglCreateContext(hdc);
+    wglMakeCurrent(hdc, *hglrc);
+}
+
+void InitializeParticles(GLuint *particleBuffers, int screenWidth, int screenHeight) {
+    glGenBuffers(2, particleBuffers);
+    for (int i = 0; i < 2; i++) {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffers[i]);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, NUM_PARTICLES * sizeof(float) * 4, NULL, GL_DYNAMIC_DRAW);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, particleBuffers[i]);
+    }
+
+    float *initialParticleData = (float*)malloc(NUM_PARTICLES * 4 * sizeof(float));
+    float ySpacing = 2.0f;
+    int currentParticle = 0;
+
+    for (float y = 0; currentParticle < NUM_PARTICLES; y += ySpacing) {
+        for (float x = 0; x < screenWidth && currentParticle < NUM_PARTICLES; x += 2.0f) {
+            initialParticleData[currentParticle*4] = x;
+            initialParticleData[currentParticle*4+1] = screenHeight - y;
+            initialParticleData[currentParticle*4+2] = 0.0f;
+            initialParticleData[currentParticle*4+3] = 0.0f;
+            currentParticle++;
+        }
+    }
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffers[0]);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, NUM_PARTICLES * 4 * sizeof(float), initialParticleData);
+    free(initialParticleData);
 }
