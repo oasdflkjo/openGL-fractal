@@ -8,6 +8,6 @@ void main() {
     if (isCursor == 1) {
         fragColor = vec4(1.0, 0.0, 0.0, 1.0); // Red color for cursor
     } else {
-        fragColor = vec4(0.0, 0.0, 0.0, 0.5); // Black color for particles
+        fragColor = vec4(1.0, 0.5, 0.0, 0.5); // Bright orange color for particles
     }
 }

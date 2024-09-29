@@ -19,7 +19,7 @@ typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC)(int interval);
 GLuint computeProgram;
 GLint mousePositionLocation;
 GLint deltaTimeLocation;
-const int NUM_PARTICLES = 15000000;
+const int NUM_PARTICLES = 30000000;
 const int WORK_GROUP_SIZE = 256;
 GLuint iResolutionLocationCompute;
 GLuint vertexArray;
